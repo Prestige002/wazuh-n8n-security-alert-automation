@@ -1,0 +1,309 @@
+{
+  "name": "Wazuh security alert automation workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "78cbcf72-ec86-49ce-9b46-da3d57abc521",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_WAZUH_INDEXER_HOST:9200/wazuh-alerts-*/_search?size=10&sort=@timestamp:desc&q=rule.id:100100",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "=httpBasicAuth",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        192,
+        128
+      ],
+      "id": "b2a3f0b1-541e-4400-8c3f-e1176ffe5a71",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2df9677b-a04f-4c20-ae94-c74a21b2f0ad",
+              "name": "=agent",
+              "value": "={{ $json.hits.hits[0]._source.agent.name }}",
+              "type": "string"
+            },
+            {
+              "id": "20f91eca-9ae9-4496-95c5-60738f618ca1",
+              "name": "agent_ip",
+              "value": "={{ $json.hits.hits[0]._source.agent.ip }}",
+              "type": "string"
+            },
+            {
+              "id": "6805a2b0-fcda-42e7-84a6-6416a80cb41f",
+              "name": "rule_id",
+              "value": "={{ $json.hits.hits[0]._source.rule.id }}",
+              "type": "string"
+            },
+            {
+              "id": "5c85bfd5-380e-4ac3-956d-2dc7b74e5fe5",
+              "name": "rule_level",
+              "value": "={{ $json.hits.hits[0]._source.rule.level }}",
+              "type": "string"
+            },
+            {
+              "id": "2a0c36a0-1d2c-44b8-8fe1-bdd143c86ec8",
+              "name": "description",
+              "value": "={{ $json.hits.hits[0]._source.rule.description }}",
+              "type": "string"
+            },
+            {
+              "id": "84726672-4951-4559-b027-2ea06c3d6936",
+              "name": "timestamp",
+              "value": "={{ $json.hits.hits[0]._source['@timestamp'] }}",
+              "type": "string"
+            },
+            {
+              "id": "bdc93e72-373d-4440-90f2-49099fedf86b",
+              "name": "alert_id",
+              "value": "={{ $json.hits.hits[0]._id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "d808bd66-77c3-472b-9e47-cbc6d7d20552",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f02fc1b1-a1b4-41b2-8717-76330ace984e",
+              "leftValue": "={{ Number($json.rule_level) }}",
+              "rightValue": 7,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        0
+      ],
+      "id": "44d7fe59-28fa-4b60-a894-05068a54be08",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "=🚨 HIGH-SEVERITY SECURITY ALERT\n\nAgent: {{ $json.agent }}\nIP Address: {{ $json.agent_ip }}\nRule ID: {{ $json.rule_id }}\nDescription: {{ $json.description }}\nSeverity: {{ $json.rule_level }}\nTime: {{ $json.timestamp }}\n\nAction: Investigate repeated authentication failures\n",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1104,
+        -16
+      ],
+      "id": "91069367-0396-4c3d-807c-2fa63ce9829b",
+      "name": "Send a text message"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v24.0/YOUR_WHATSAPP_PHONE_NUMBER_ID/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_WHATSAPP_CLOUD_API_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"YOUR_RECIPIENT_PHONE_NUMBER\",\n  \"type\": \"text\",\n  \"text\": {\n    \"preview_url\": false,\n    \"body\": \"🚨 HIGH-SEVERITY SECURITY ALERT\\n\\nAgent: {{ $json.agent }}\\nIP Address: {{ $json.agent_ip }}\\nRule ID: {{ $json.rule_id }}\\nSeverity: {{ $json.rule_level }}\\n\\nDetection: {{ $json.description }}\\n\\nTime: {{ $json.timestamp }}\\n\\nRecommended Action: Investigate repeated authentication failures.\\n\\nAutomatically generated by the Wazuh and n8n security monitoring workflow.\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1104,
+        -336
+      ],
+      "id": "daacb55c-a80c-4dba-9e7d-d1000ef5ee71",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "sendTo": "recipient1@example.com, recipient2@example.com",
+        "subject": "Security Alert – Potential Brute Force Detected",
+        "emailType": "text",
+        "message": "=🚨 HIGH-SEVERITY SECURITY ALERT  \n\nAgent: {{ $json.agent }} \nIP Address: {{ $json.agent_ip }}\nRule ID: {{ $json.rule_id }} \nSeverity: {{ $json.rule_level }}  \nDetection: {{ $json.description }}  \nTime: {{ $json.timestamp }}  \n\nRecommended Action: Investigate repeated authentication failures.  This notification was automatically generated by the Wazuh and n8n security monitoring workflow.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        -160
+      ],
+      "id": "6c058286-a33e-4912-8a77-039addafb935",
+      "name": "Send a message"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -128,
+        176
+      ],
+      "id": "106b3e52-4494-4535-9372-51b95c290dea",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ $json.alert_id }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        656,
+        -256
+      ],
+      "id": "760f6a67-66bd-406e-a620-e201a86d7649",
+      "name": "Remove Duplicates"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        []
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "timezone": "Africa/Lagos",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "nodeGroups": [],
+  "tags": []
+}
